@@ -817,7 +817,6 @@ async function handleApi(req, res, url) {
     const target = new URL(YANDEX_AUTHORIZE);
     target.searchParams.set('response_type', 'code');
     target.searchParams.set('client_id', YANDEX_CLIENT_ID);
-    target.searchParams.set('scope', 'login:info login:email login:avatar');
     target.searchParams.set('redirect_uri', `${baseUrl(req)}/api/auth/yandex/callback`);
     target.searchParams.set('state', state);
     target.searchParams.set('force_confirm', 'yes');
