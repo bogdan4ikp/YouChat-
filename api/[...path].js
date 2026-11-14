@@ -102,6 +102,59 @@ export default async function handler(req,res){
    for await(const chunk of blob.stream)res.write(chunk);
    return res.end();
   }
+  if(p==='/api/groups/by-handle'&&m==='GET'){
+   if(!user)return fail(res,401,'Требуется вход');
+   const h=(u.searchParams.get('handle')||'').toLowerCase();
+   const c=(await q("SELECT * FROM conversations WHERE type='group' AND handle=$1 AND deleted=false",[h]))[0];
+   if(!c)return fail(res,404,'Группа не найдена');
+   const mem=await getMember(c.id,user.id),reqRow=(await q('SELECT id FROM join_requests WHERE conv_id=$1 AND user_id=$2',[c.id,user.id]))[0],count=(await q('SELECT count(*)::int n FROM members WHERE conv_id=$1 AND hidden=false',[c.id]))[0].n;
+   return send(res,200,{group:{id:c.id,name:c.name,handle:c.handle,desc:c.descr,grad:c.grad,avatar:c.avatar,banner:c.banner,bannerImg:c.banner_img,access:c.access,members:count,isMember:!!mem,requested:!!reqRow,requestsOn:!!c.requests_on}});
+  }
+  const editMatch=p.match(/^\/api\/conversations\/([^/]+)\/messages\/([^/]+)$/);
+  if(editMatch&&m==='PATCH'){
+   if(!user)return fail(res,401,'Требуется вход');
+   const cid=editMatch[1],mid=editMatch[2],mem=await getMember(cid,user.id),row=(await q('SELECT * FROM messages WHERE id=$1 AND conv_id=$2',[mid,cid]))[0];
+   if(!mem||!row)return fail(res,404,'Сообщение не найдено');
+   if(row.author!==user.id)return fail(res,403,'Можно менять только свои сообщения');
+   if(now()-Number(row.t)>86400000)return fail(res,400,'Время редактирования истекло');
+   const b=await read(req),text=String(b.text||'').slice(0,4000);if(!text.trim())return fail(res,400,'Текст не может быть пустым');
+   const updated=(await q('UPDATE messages SET text=$1,edited_at=$2 WHERE id=$3 RETURNING *',[text,now(),mid]))[0];return send(res,200,{message:msg(updated)});
+  }
+  const delMatch=p.match(/^\/api\/conversations\/([^/]+)\/messages\/delete$/);
+  if(delMatch&&m==='POST'){
+   if(!user)return fail(res,401,'Требуется вход');const cid=delMatch[1],mem=await getMember(cid,user.id);if(!mem)return fail(res,403,'Нет доступа');
+   const b=await read(req),ids=Array.isArray(b.ids)?b.ids.map(String).slice(0,200):[];
+   for(const mid of ids){const row=(await q('SELECT * FROM messages WHERE id=$1 AND conv_id=$2',[mid,cid]))[0];if(!row)continue;
+    if(row.author===user.id||['owner','admin'].includes(mem.role)){await q("UPDATE messages SET deleted=true,text='',att='[]'::jsonb,react='{}'::jsonb,edited_at=NULL WHERE id=$1",[mid]);await q('DELETE FROM pins WHERE msg_id=$1',[mid]);await q('DELETE FROM hides WHERE msg_id=$1',[mid]);}
+    else await q('INSERT INTO hides(msg_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING',[mid,user.id]);
+   }return send(res,200,{ok:true});
+  }
+  const reactionMatch=p.match(/^\/api\/conversations\/([^/]+)\/messages\/([^/]+)\/(reaction|pin)$/);
+  if(reactionMatch&&m==='POST'){
+   if(!user)return fail(res,401,'Требуется вход');const cid=reactionMatch[1],mid=reactionMatch[2],action=reactionMatch[3],mem=await getMember(cid,user.id);
+   const row=(await q('SELECT * FROM messages WHERE id=$1 AND conv_id=$2',[mid,cid]))[0];if(!mem||!row)return fail(res,404,'Сообщение не найдено');
+   if(action==='reaction'){const b=await read(req),emoji=String(b.emoji||'').slice(0,12);if(!emoji)return fail(res,400,'Нет эмодзи');const reacts=parse(row.react,{}),list=Array.isArray(reacts[emoji])?reacts[emoji]:[],i=list.indexOf(user.id);if(i>=0)list.splice(i,1);else list.push(user.id);if(list.length)reacts[emoji]=list;else delete reacts[emoji];await q('UPDATE messages SET react=$1::jsonb WHERE id=$2',[JSON.stringify(reacts),mid]);return send(res,200,{react:reacts});}
+   const pinned=!row.pinned;await q('UPDATE messages SET pinned=$1 WHERE id=$2',[pinned,mid]);if(pinned)await q('INSERT INTO pins(conv_id,msg_id,t) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',[cid,mid,now()]);else await q('DELETE FROM pins WHERE msg_id=$1',[mid]);return send(res,200,{pinned});
+  }
+  const groupMatch=p.match(/^\/api\/conversations\/([^/]+)(?:\/(read|pin|leave|join|members|transfer|requests\/accept-all))?(?:\/members\/([^/]+)(?:\/(role))?)?(?:\/requests\/([^/]+))?$/);
+  if(groupMatch){
+   if(!user)return fail(res,401,'Требуется вход');
+   const cid=groupMatch[1],action=groupMatch[2],target=groupMatch[3],sub=groupMatch[4],requestId=groupMatch[5],c=await getConv(cid),mem=await getMember(cid,user.id);
+   if(!c)return fail(res,404,'Беседа не найдена');
+   if(action==='read'&&m==='POST'){if(!mem)return fail(res,404,'Беседа не найдена');await q('UPDATE members SET last_read=$1 WHERE conv_id=$2 AND user_id=$3',[now(),cid,user.id]);return send(res,200,{ok:true});}
+   if(action==='pin'&&m==='POST'){if(!mem)return fail(res,404,'Беседа не найдена');const b=await read(req);await q('UPDATE members SET pinned=$1 WHERE conv_id=$2 AND user_id=$3',[!!b.pinned,cid,user.id]);return send(res,200,{pinned:!!b.pinned});}
+   if(action==='leave'&&m==='DELETE'){if(!mem)return fail(res,404,'Вы не участник');if(c.type==='group'&&mem.role==='owner'){const n=(await q('SELECT count(*)::int n FROM members WHERE conv_id=$1 AND user_id<>$2 AND hidden=false',[cid,user.id]))[0].n;if(n)return fail(res,400,'Сначала передайте владение другому участнику');await q('UPDATE conversations SET deleted=true WHERE id=$1',[cid]);}else if(c.type==='group'){await q('INSERT INTO messages(id,conv_id,author,t,sys) VALUES($1,$2,$3,$4,$5)',[id('m'),cid,user.id,now(),user.name+' покинул(а) группу']);await q('DELETE FROM members WHERE conv_id=$1 AND user_id=$2',[cid,user.id]);}else await q('UPDATE members SET hidden=true WHERE conv_id=$1 AND user_id=$2',[cid,user.id]);return send(res,200,{ok:true});}
+   if(action==='join'&&m==='POST'){if(c.type!=='group')return fail(res,404,'Группа не найдена');if(mem){await q('UPDATE members SET hidden=false WHERE conv_id=$1 AND user_id=$2',[cid,user.id]);return send(res,200,{status:'member',convId:cid,state:await state(user.id)});}if(c.access==='open'||!c.requests_on){await q("INSERT INTO members(conv_id,user_id,role,joined) VALUES($1,$2,'member',$3) ON CONFLICT DO NOTHING",[cid,user.id,now()]);await q('INSERT INTO messages(id,conv_id,author,t,sys) VALUES($1,$2,$3,$4,$5)',[id('m'),cid,user.id,now(),user.name+' вступил(а) в группу']);return send(res,200,{status:'member',convId:cid,state:await state(user.id)});}await q('INSERT INTO join_requests(id,conv_id,user_id,created) VALUES($1,$2,$3,$4) ON CONFLICT(conv_id,user_id) DO NOTHING',[id('r'),cid,user.id,now()]);return send(res,200,{status:'requested',convId:cid});}
+   if(action==='members'&&m==='POST'){if(!['owner','admin'].includes(mem?.role))return fail(res,403,'Недостаточно прав');const b=await read(req),ids=Array.isArray(b.ids)?b.ids.map(String).slice(0,50):[];let added=0;for(const x of ids){if(x===user.id)continue;const exists=await getMember(cid,x);if(exists){if(exists.hidden)await q('UPDATE members SET hidden=false WHERE conv_id=$1 AND user_id=$2',[cid,x]);continue;}const ok=(await q('SELECT id FROM users WHERE id=$1',[x])).length;if(ok){await q("INSERT INTO members(conv_id,user_id,role,joined) VALUES($1,$2,'member',$3)",[cid,x,now()]);added++;}}return send(res,200,{added,state:await state(user.id)});}
+   if(action==='transfer'&&m==='POST'){if(mem?.role!=='owner')return fail(res,403,'Только владелец передаёт владение');const b=await read(req),to=String(b.userId||''),tm=await getMember(cid,to);if(!tm||to===user.id)return fail(res,400,'Передать можно только участнику группы');await q("UPDATE members SET role='admin' WHERE conv_id=$1 AND role='owner'",[cid]);await q("UPDATE members SET role='owner' WHERE conv_id=$1 AND user_id=$2",[cid,to]);return send(res,200,{state:await state(user.id)});}
+   if(target&&sub==='role'&&m==='POST'){if(mem?.role!=='owner')return fail(res,403,'Только владелец меняет роли');const tm=await getMember(cid,target);if(!tm||tm.role==='owner')return fail(res,404,'Участник не найден');const b=await read(req);await q('UPDATE members SET role=$1 WHERE conv_id=$2 AND user_id=$3',[b.role==='admin'?'admin':'member',cid,target]);return send(res,200,{state:await state(user.id)});}
+   if(target&&m==='DELETE'){if(!['owner','admin'].includes(mem?.role)||target===user.id)return fail(res,403,'Недостаточно прав');const tm=await getMember(cid,target);if(!tm||tm.role==='owner'||(mem.role==='admin'&&tm.role!=='member'))return fail(res,403,'Недостаточно прав');await q('DELETE FROM members WHERE conv_id=$1 AND user_id=$2',[cid,target]);await q('DELETE FROM join_requests WHERE conv_id=$1 AND user_id=$2',[cid,target]);return send(res,200,{state:await state(user.id)});}
+   if(action==='requests/accept-all'&&m==='POST'){if(!['owner','admin'].includes(mem?.role))return fail(res,403,'Недостаточно прав');const rs=await q('SELECT * FROM join_requests WHERE conv_id=$1',[cid]);for(const x of rs){await q("INSERT INTO members(conv_id,user_id,role,joined) VALUES($1,$2,'member',$3) ON CONFLICT DO NOTHING",[cid,x.user_id,now()]);await q('DELETE FROM join_requests WHERE id=$1',[x.id]);}return send(res,200,{accepted:rs.length,state:await state(user.id)});}
+   if(requestId&&m==='POST'){if(!['owner','admin'].includes(mem?.role))return fail(res,403,'Недостаточно прав');const b=await read(req),rr=(await q('SELECT * FROM join_requests WHERE id=$1 AND conv_id=$2',[requestId,cid]))[0];if(!rr)return fail(res,404,'Заявка не найдена');await q('DELETE FROM join_requests WHERE id=$1',[requestId]);if(b.accept)await q("INSERT INTO members(conv_id,user_id,role,joined) VALUES($1,$2,'member',$3) ON CONFLICT DO NOTHING",[cid,rr.user_id,now()]);return send(res,200,{state:await state(user.id)});}
+  }
+  if(p.startsWith('/api/conversations/')&&m==='PATCH'){
+   if(!user)return fail(res,401,'Требуется вход');const cid=p.split('/')[3],c=await getConv(cid),mem=await getMember(cid,user.id);if(!c||c.type!=='group')return fail(res,404,'Группа не найдена');if(mem?.role!=='owner')return fail(res,403,'Только владелец меняет настройки');const b=await read(req),name=String(b.name??c.name).trim().slice(0,40),handle=String(b.handle??c.handle).trim().toLowerCase();if(name.length<2||!validHandle(handle))return fail(res,400,'Проверьте название и адрес');try{await q('UPDATE conversations SET name=$1,handle=$2,descr=$3,grad=$4,banner=$5,banner_img=$6,avatar=$7,access=$8,requests_on=$9,perms=$10::jsonb,icon=$11 WHERE id=$12',[name,handle,String(b.desc??c.descr).slice(0,220),Number(b.grad??c.grad)||0,String(b.banner??c.banner),String(b.bannerImg??c.banner_img),String(b.avatar??c.avatar),b.access===undefined?c.access:(b.access==='open'?'open':'closed'),b.requestsOn===undefined?c.requests_on:!!b.requestsOn,JSON.stringify(b.perms??parse(c.perms,{})),String(b.icon||name.slice(0,2)).slice(0,4),cid]);}catch(e){if(e.code==='23505')return fail(res,409,'Такой адрес уже занят');throw e;}return send(res,200,{state:await state(user.id)});
+  }
   return fail(res,404,'Не найдено');
  }catch(e){console.error('YouChat API:',e);return fail(res,e.status||500,e.status?e.message:'Внутренняя ошибка сервера');}
 }
