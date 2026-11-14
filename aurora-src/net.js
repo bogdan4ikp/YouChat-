@@ -131,40 +131,18 @@ const NET = (() => {
   }
 
   function connectStream() {
-    if (cfg.stream) {
-      try { cfg.stream.close(); } catch (error) { /* ignore */ }
-      cfg.stream = null;
-    }
-    if (!online() || typeof EventSource === 'undefined') return;
-    const stream = new EventSource('/api/stream');
-    cfg.stream = stream;
-    stream.onopen = () => setStatus('');
-    stream.onerror = () => {
-      if (online()) setStatus('Переподключение…');
-    };
-    stream.onmessage = (event) => {
-      let payload = null;
-      try { payload = JSON.parse(event.data); } catch (error) { return; }
-      if (!payload) return;
-      if (payload.type === 'hello') {
-        setStatus('');
-        return;
-      }
-      if (payload.type === 'request-declined') {
-        if (typeof toast === 'function') toast('Заявка на вступление отклонена', 'warn');
-        refresh();
-        return;
-      }
-      refresh();
-    };
+    if (cfg.stream) clearInterval(cfg.stream);
+    if (!online()) return;
+    cfg.stream = setInterval(() => {
+      if (document.visibilityState === 'visible' && online()) refresh();
+    }, 7000);
+    refresh();
   }
-
   function stopStream() {
     if (!cfg.stream) return;
-    try { cfg.stream.close(); } catch (error) { /* ignore */ }
+    clearInterval(cfg.stream);
     cfg.stream = null;
   }
-
   function onUnauthorized() {
     if (!cfg.online) return;
     cfg.online = false;
