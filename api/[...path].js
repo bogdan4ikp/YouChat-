@@ -1,5 +1,5 @@
 import postgres from 'postgres';
-import { put } from '@vercel/blob';
+import { put, get } from '@vercel/blob';
 import crypto from 'node:crypto';
 
 const db = postgres(process.env.DATABASE_URL || process.env.POSTGRES_URL, { max: 1, prepare: false, ssl: 'require' });
@@ -89,7 +89,19 @@ export default async function handler(req,res){
   if(p==='/api/conversations'&&m==='POST'){if(!user)return fail(res,401,'Требуется вход');const b=await read(req),name=String(b.name||'').trim(),handle=String(b.handle||'').trim().toLowerCase();if(name.length<2||name.length>40||!validHandle(handle))return fail(res,400,'Проверьте название и адрес группы');const cid=id('g'),ts=now();try{await db.begin(async tx=>{await tx.unsafe("INSERT INTO conversations(id,type,name,handle,grad,icon,banner,banner_img,avatar,descr,access,requests_on,perms,created) VALUES($1,'group',$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13)",[cid,name,handle,Number(b.grad)||0,String(b.icon||name.slice(0,2)).slice(0,4),String(b.banner||'mono'),String(b.bannerImg||''),String(b.avatar||''),String(b.desc||'').slice(0,220),b.access==='open'?'open':'closed',b.requestsOn!==false,JSON.stringify({admins:{deleteMessages:true,removeMembers:true,acceptRequests:true}}),ts]);await tx.unsafe("INSERT INTO members(conv_id,user_id,role,joined) VALUES($1,$2,'owner',$3)",[cid,user.id,ts]);await tx.unsafe('INSERT INTO messages(id,conv_id,author,t,sys) VALUES($1,$2,$3,$4,$5)',[id('m'),cid,user.id,ts,user.name+' создал(а) группу «'+name+'»']);});}catch(e){if(e.code==='23505')return fail(res,409,'Такой адрес уже занят');throw e;}return send(res,200,{convId:cid,state:await state(user.id)});}
   const mm=p.match(/^\/api\/conversations\/([^/]+)\/messages$/);
   if(mm&&m==='POST'){if(!user)return fail(res,401,'Требуется вход');const cid=mm[1],c=await getConv(cid),mem=await getMember(cid,user.id);if(!c||!mem)return fail(res,403,'Нет доступа');const b=await read(req),text=String(b.text||'').slice(0,4000),att=Array.isArray(b.att)?b.att.slice(0,10):[];if(!text.trim()&&!att.length)return fail(res,400,'Пустое сообщение');const x=(await q('INSERT INTO messages(id,conv_id,author,t,text,att,reply,forwarded_from) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8) RETURNING *',[id('m'),cid,user.id,now(),text,JSON.stringify(att),b.reply||null,b.forwardedFrom||null]))[0];return send(res,200,{message:msg(x)});}
-  if(p==='/api/upload'&&m==='POST'){if(!user)return fail(res,401,'Требуется вход');if(!process.env.BLOB_READ_WRITE_TOKEN)return fail(res,503,'Vercel Blob не настроен');const type=String(req.headers['content-type']||'');if(!/^(image|video|audio)\//.test(type))return fail(res,415,'Неподдерживаемый тип файла');const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>4*1024*1024)return fail(res,413,'Файл превышает лимит загрузки 4 МБ');chunks.push(c);}const ext=({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','video/mp4':'mp4','video/webm':'webm','audio/mpeg':'mp3','audio/ogg':'ogg','audio/mp4':'m4a'})[type]||'bin';const blob=await put(id('f')+'.'+ext,Buffer.concat(chunks),{access:'public',contentType:type});return send(res,200,{url:blob.url,size,type});}
+  if(p==='/api/upload'&&m==='POST'){if(!user)return fail(res,401,'Требуется вход');if(!process.env.BLOB_READ_WRITE_TOKEN)return fail(res,503,'Vercel Blob не настроен');const type=String(req.headers['content-type']||'');if(!/^(image|video|audio)\//.test(type))return fail(res,415,'Неподдерживаемый тип файла');const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>4*1024*1024)return fail(res,413,'Файл превышает лимит загрузки 4 МБ');chunks.push(c);}const ext=({'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','video/mp4':'mp4','video/webm':'webm','audio/mpeg':'mp3','audio/ogg':'ogg','audio/mp4':'m4a'})[type]||'bin';const blob=await put(id('f')+'.'+ext,Buffer.concat(chunks),{access:'private',contentType:type,addRandomSuffix:true});return send(res,200,{url:'/api/blob?pathname='+encodeURIComponent(blob.pathname),size,type});}
+  if(p==='/api/blob'&&m==='GET'){
+   if(!user)return fail(res,401,'Требуется вход');
+   const pathname=u.searchParams.get('pathname')||'';
+   if(!pathname||pathname.includes('..')||pathname.startsWith('/'))return fail(res,400,'Некорректный файл');
+   const owned=await q("SELECT 1 FROM users WHERE id=$1 AND (COALESCE(avatar,'') LIKE $2 OR COALESCE(banner_img,'') LIKE $2) UNION SELECT 1 FROM messages m JOIN members mb ON mb.conv_id=m.conv_id WHERE mb.user_id=$1 AND m.att::text LIKE $2 LIMIT 1",[user.id,'%'+pathname+'%']);
+   if(!owned.length)return fail(res,404,'Файл не найден');
+   const blob=await get(pathname,{access:'private'});
+   if(!blob||blob.statusCode!==200)return fail(res,404,'Файл не найден');
+   res.statusCode=200;res.setHeader('content-type',blob.blob.contentType||'application/octet-stream');res.setHeader('cache-control','private, max-age=300');res.setHeader('x-content-type-options','nosniff');
+   for await(const chunk of blob.stream)res.write(chunk);
+   return res.end();
+  }
   return fail(res,404,'Не найдено');
  }catch(e){console.error('YouChat API:',e);return fail(res,e.status||500,e.status?e.message:'Внутренняя ошибка сервера');}
 }
