@@ -217,29 +217,7 @@ const NET = (() => {
         <span class="yandex-arrow" aria-hidden="true">→</span>
       </button>
       <p class="auth-note" data-yandex-note hidden></p>
-      <button type="button" class="auth-details-toggle" aria-expanded="false">
-        <span>Войти или зарегистрироваться по логину</span>
-        <svg class="icon" aria-hidden="true"><use href="#i-chev"/></svg>
-      </button>
-      <form id="authForm" class="auth-form" novalidate hidden>
-        <div class="auth-tabs" role="tablist">
-          <button type="button" class="auth-tab is-on" data-auth-mode="login" role="tab" aria-selected="true">Вход</button>
-          <button type="button" class="auth-tab" data-auth-mode="register" role="tab" aria-selected="false">Регистрация</button>
-        </div>
-        <label class="auth-field">
-          <span>Короткий адрес</span>
-          <span class="auth-input"><b>@</b><input class="auth-username" maxlength="24" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="username" aria-label="Короткий адрес"></span>
-        </label>
-        <label class="auth-field" data-auth-name hidden>
-          <span>Как вас показывать</span>
-          <input class="auth-plain auth-name" maxlength="32" autocomplete="name" placeholder="Имя и фамилия" aria-label="Отображаемое имя">
-        </label>
-        <label class="auth-field">
-          <span>Пароль</span>
-          <input class="auth-plain auth-password" type="password" maxlength="72" autocomplete="current-password" placeholder="Минимум 6 символов" aria-label="Пароль">
-        </label>
-        <button type="submit" class="btn primary auth-submit">Войти</button>
-      </form>
+
       <p class="auth-error" hidden></p>
       <p class="auth-hint">Аккаунт, переписки и вложения хранятся на сервере YouChat. Через Яндекс ID пароль не нужен.</p>
     </div>`;
@@ -285,14 +263,6 @@ const NET = (() => {
           startYandex();
           return;
         }
-        if (event.target.closest('.auth-details-toggle')) {
-          const form = screen.querySelector('#authForm');
-          togglePasswordForm(!form || form.hidden);
-        }
-      });
-      screen.addEventListener('submit', (event) => {
-        event.preventDefault();
-        submitAuth();
       });
     }
     return screen;
@@ -300,42 +270,6 @@ const NET = (() => {
 
   function startYandex() {
     location.assign('/api/auth/yandex/start');
-  }
-
-  function togglePasswordForm(show) {
-    const screen = document.getElementById('authScreen');
-    if (!screen) return;
-    const form = screen.querySelector('#authForm');
-    const toggle = screen.querySelector('.auth-details-toggle');
-    if (!form) return;
-    form.hidden = !show;
-    if (toggle) {
-      toggle.setAttribute('aria-expanded', String(show));
-      const label = toggle.querySelector('span');
-      if (label) label.textContent = show ? 'Скрыть вход по логину' : 'Войти или зарегистрироваться по логину';
-    }
-    if (show) {
-      const field = form.querySelector('.auth-username');
-      if (field) setTimeout(() => field.focus(), 60);
-    }
-  }
-
-  function setAuthMode(mode) {
-    cfg.mode = mode === 'register' ? 'register' : 'login';
-    const screen = ensureAuth();
-    const register = cfg.mode === 'register';
-    screen.querySelectorAll('[data-auth-mode]').forEach((btn) => {
-      const on = btn.dataset.authMode === cfg.mode;
-      btn.classList.toggle('is-on', on);
-      btn.setAttribute('aria-selected', String(on));
-    });
-    const nameField = screen.querySelector('[data-auth-name]');
-    if (nameField) nameField.hidden = !register;
-    const submit = screen.querySelector('.auth-submit');
-    if (submit) submit.textContent = register ? 'Создать аккаунт' : 'Войти';
-    const password = screen.querySelector('.auth-password');
-    if (password) password.autocomplete = register ? 'new-password' : 'current-password';
-    showError('');
   }
 
   async function submitAuth() {
@@ -400,23 +334,18 @@ const NET = (() => {
     screen.hidden = false;
     document.body.classList.add('app-booting');
     showError('');
-    const userInput = screen.querySelector('.auth-username');
-    const passInput = screen.querySelector('.auth-password');
-    if (userInput) userInput.value = '';
-    if (passInput) passInput.value = '';
-    setAuthMode(cfg.mode === 'register' ? 'register' : 'login');
+    const yandexBtn = screen.querySelector('.auth-yandex');
     if (cfg.yandex === false) {
-      yandexNote('Вход через Яндекс ID не настроен на сервере: добавьте YANDEX_CLIENT_ID и YANDEX_CLIENT_SECRET в server/.env.');
-      togglePasswordForm(true);
+      yandexNote('Регистрация через Яндекс ID пока не настроена. Администратору нужно добавить Client ID и новый Client Secret в переменные Railway.');
+      if (yandexBtn) yandexBtn.disabled = true;
     } else {
-      yandexNote('');
-      togglePasswordForm(false);
-      if (isLocalHost()) {
-        togglePasswordForm(false);
-        yandexNote('Локальный запуск: Яндекс вернёт вас на публичный адрес. Для проверки на localhost войдите по логину и паролю.');
+      yandexNote(isLocalHost()
+        ? 'Для входа откройте публичный адрес YouChat — авторизация Яндекса возвращает пользователя на сайт.'
+        : '');
+      if (yandexBtn) {
+        yandexBtn.disabled = false;
+        setTimeout(() => yandexBtn.focus(), 80);
       }
-      const yandexBtn = screen.querySelector('.auth-yandex');
-      if (yandexBtn) setTimeout(() => yandexBtn.focus(), 80);
     }
     applyAuthQuery();
   }
