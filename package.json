@@ -4,7 +4,7 @@
   "type": "module",
   "engines": { "node": ">=20" },
   "dependencies": {
-    "@vercel/blob": "^2.0.0",
+    "@vercel/blob": "^2.3.1",
     "postgres": "^3.4.7"
   }
 }
