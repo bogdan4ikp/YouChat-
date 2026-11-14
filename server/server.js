@@ -795,40 +795,9 @@ async function handleApi(req, res, url) {
     json(res, 200, { ok: true, name: 'YouChat server', time: now(), yandex: YANDEX_ENABLED });
   });
 
-  route('POST', /^\/api\/auth\/register$/, async () => {
-    if (!throttle(req.socket.remoteAddress || 'x')) return fail(res, 429, 'Слишком много попыток, попробуйте позже');
-    const body = await readJson(req);
-    const username = String(body.username || '').trim().toLowerCase();
-    const password = String(body.password || '');
-    const name = String(body.name || '').trim();
-    if (!validUsername(username)) return fail(res, 400, 'Логин: 3–24 символа, латиница, цифры и _');
-    if (password.length < 6) return fail(res, 400, 'Пароль должен быть не короче 6 символов');
-    if (name.length < 2 || name.length > 32) return fail(res, 400, 'Имя от 2 до 32 символов');
-    if (usernameTaken(username)) return fail(res, 409, 'Такой логин уже занят');
-    const salt = crypto.randomBytes(16).toString('hex');
-    const id = newId('u');
-    st(`INSERT INTO users (id, username, name, pass_hash, salt, grad, accent, custom, bio, banner, banner_img, avatar, created, last_seen)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
-      id, username, name, hashPassword(password, salt), salt,
-      Math.floor(Math.random() * 6), '#e6e2d8', '', '', 'mono', '', null, now(), now()
-    );
-    const token = createSession(id);
-    res.setHeader('set-cookie', sessionCookie(token, req));
-    json(res, 200, { state: buildState(id) });
-  });
-
-  route('POST', /^\/api\/auth\/login$/, async () => {
-    if (!throttle(req.socket.remoteAddress || 'x')) return fail(res, 429, 'Слишком много попыток, попробуйте позже');
-    const body = await readJson(req);
-    const username = String(body.username || '').trim().toLowerCase();
-    const password = String(body.password || '');
-    const row = st('SELECT * FROM users WHERE username=?').get(username);
-    if (!row || !safeEqual(hashPassword(password, row.salt), row.pass_hash)) {
-      return fail(res, 401, 'Неверный логин или пароль');
-    }
-    const token = createSession(row.id);
-    res.setHeader('set-cookie', sessionCookie(token, req));
-    json(res, 200, { state: buildState(row.id) });
+  // YouChat uses Yandex ID exclusively. Password registration/login are intentionally disabled.
+  route('POST', /^\/api\/auth\/(?:register|login)$/, async () => {
+    fail(res, 403, 'Вход и регистрация доступны только через Яндекс ID');
   });
 
   route('POST', /^\/api\/auth\/logout$/, async () => {
