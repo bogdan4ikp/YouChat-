@@ -336,8 +336,8 @@ const NET = (() => {
     showError('');
     const yandexBtn = screen.querySelector('.auth-yandex');
     if (cfg.yandex === false) {
-      yandexNote('Регистрация через Яндекс ID пока не настроена. Администратору нужно добавить Client ID и новый Client Secret в переменные Railway.');
-      if (yandexBtn) yandexBtn.disabled = true;
+      yandexNote('Сервер пока не подтвердил настройку Яндекс ID. Нажмите кнопку, чтобы проверить вход; если ключи не настроены, YouChat покажет причину.');
+      if (yandexBtn) yandexBtn.disabled = false;
     } else {
       yandexNote(isLocalHost()
         ? 'Для входа откройте публичный адрес YouChat — авторизация Яндекса возвращает пользователя на сайт.'
