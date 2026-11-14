@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const src = path.join(root, 'aurora-src', 'assets', 'logo.jpg');
+const src = path.join(root, 'aurora-src', 'assets', 'logo.svg');
 const cssPath = path.join(root, 'aurora-src', 'styles.css');
 
 const b64 = fs.readFileSync(src).toString('base64');
