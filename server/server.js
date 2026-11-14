@@ -41,7 +41,7 @@ const SESSION_COOKIE = 'youchat_sid';
 const OAUTH_COOKIE = 'youchat_oauth';
 const YANDEX_CLIENT_ID = String(process.env.YANDEX_CLIENT_ID || '').trim();
 const YANDEX_CLIENT_SECRET = String(process.env.YANDEX_CLIENT_SECRET || '').trim();
-const PUBLIC_URL = String(process.env.PUBLIC_URL || '').trim().replace(/\/+$/, '');
+const PUBLIC_URL = String(process.env.PUBLIC_URL || 'https://www.youchat-msg.ru').trim().replace(/\/+$/, '');
 const YANDEX_ENABLED = Boolean(YANDEX_CLIENT_ID && YANDEX_CLIENT_SECRET);
 const YANDEX_AUTHORIZE = 'https://oauth.yandex.ru/authorize';
 const YANDEX_TOKEN = 'https://oauth.yandex.ru/token';
@@ -817,11 +817,12 @@ async function handleApi(req, res, url) {
     const target = new URL(YANDEX_AUTHORIZE);
     target.searchParams.set('response_type', 'code');
     target.searchParams.set('client_id', YANDEX_CLIENT_ID);
+    target.searchParams.set('scope', 'login:info login:email login:avatar');
     target.searchParams.set('redirect_uri', `${baseUrl(req)}/api/auth/yandex/callback`);
     target.searchParams.set('state', state);
     target.searchParams.set('force_confirm', 'yes');
     res.writeHead(302, {
-      'set-cookie': `${OAUTH_COOKIE}=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`,
+      'set-cookie': `${OAUTH_COOKIE}=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600${PUBLIC_URL.startsWith('https://') ? '; Secure' : ''}`,
       location: target.toString(),
       'cache-control': 'no-store'
     });
