@@ -1457,6 +1457,11 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('x-content-type-options', 'nosniff');
   res.setHeader('referrer-policy', 'same-origin');
 
+  if (url.pathname === '/health') {
+    json(res, 200, { ok: true, service: 'youchat', database: 'connected' });
+    return;
+  }
+
   if (url.pathname.startsWith('/api/')) {
     try {
       await handleApi(req, res, url);
