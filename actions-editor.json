@@ -1,0 +1,14 @@
+[
+  { "type": "click", "selector": "#meCard" },
+  { "type": "click", "selector": "[data-menu-act=\"reset\"]" },
+  { "type": "click", "selector": "#confirmAction" },
+  { "type": "click", "selector": "#btnNewGroup" },
+  { "type": "fill", "selector": "#grpName", "value": "Вечерний мудборд" },
+  { "type": "fill", "selector": "#grpHandle", "value": "moodboard" },
+  { "type": "click", "selector": ".modal button[type=\"submit\"]" },
+  { "type": "click", "selector": "#chatTitleBtn" },
+  { "type": "click", "selector": "[data-edit-group]" },
+  { "type": "assert", "selector": ".modal .modal-title", "property": "text", "equals": "Настроить группу" },
+  { "type": "click", "selector": "[data-banner-pick=\"nebula\"]" },
+  { "type": "click", "selector": ".modal button[type=\"submit\"]" }
+]

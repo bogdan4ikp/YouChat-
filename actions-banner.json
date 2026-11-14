@@ -1,0 +1,10 @@
+[
+  { "type": "click", "selector": "#meCard" },
+  { "type": "click", "selector": "[data-menu-act=\"reset\"]" },
+  { "type": "click", "selector": "#confirmAction" },
+  { "type": "click", "selector": "#btnNewGroup" },
+  { "type": "fill", "selector": "#grpName", "value": "Студия движения" },
+  { "type": "click", "selector": "[data-banner-pick=\"waves\"]" },
+  { "type": "click", "selector": ".modal button[type=\"submit\"]" },
+  { "type": "click", "selector": "#chatTitleBtn" }
+]

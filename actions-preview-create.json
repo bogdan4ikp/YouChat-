@@ -1,0 +1,7 @@
+[
+  { "type": "click", "selector": "#meCard" },
+  { "type": "click", "selector": "[data-menu-act=\"reset\"]" },
+  { "type": "click", "selector": "#confirmAction" },
+  { "type": "click", "selector": "#btnNewGroup" },
+  { "type": "fill", "selector": "#grpName", "value": "Вечерний мудборд" }
+]

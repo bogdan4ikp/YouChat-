@@ -1,0 +1,18 @@
+[
+  { "type": "click", "selector": "#meCard" },
+  { "type": "click", "selector": "[data-menu-act=\"reset\"]" },
+  { "type": "click", "selector": "#confirmAction" },
+  { "type": "click", "selector": "#meCard" },
+  { "type": "click", "selector": "[data-menu-act=\"profile\"]" },
+  { "type": "assert", "selector": ".modal .link-row code", "property": "text", "equals": "https://youchat-msg.ru/u/anya_moon" },
+  { "type": "click", "selector": "[data-edit-profile]" },
+  { "type": "assert", "selector": ".modal .modal-title", "property": "text", "equals": "Редактировать профиль" },
+  { "type": "fill", "selector": "#pfUser", "value": "Лиза" },
+  { "type": "assert", "selector": "#pfUser", "property": "value", "equals": "liza" },
+  { "type": "assert", "selector": "#pfUserState", "property": "text", "equals": "Свободен" },
+  { "type": "fill", "selector": "#pfUser", "value": "liza_sokol" },
+  { "type": "assert", "selector": "#pfUserState", "property": "text", "equals": "Занят — выберите другой" },
+  { "type": "fill", "selector": "#pfUser", "value": "anya_2026" },
+  { "type": "assert", "selector": "#pfUserState", "property": "text", "equals": "Свободен" },
+  { "type": "click", "selector": "[data-bn-tab=\"gallery\"]" }
+]

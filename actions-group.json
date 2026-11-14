@@ -1,0 +1,21 @@
+[
+  { "type": "click", "selector": "#meCard" },
+  { "type": "click", "selector": "[data-menu-act=\"reset\"]" },
+  { "type": "click", "selector": "#confirmAction" },
+  { "type": "click", "selector": "#btnNewGroup" },
+  { "type": "fill", "selector": "#grpName", "value": "Дизайн-клуб" },
+  { "type": "fill", "selector": "#grpHandle", "value": "дизайн" },
+  { "type": "assert", "selector": "#grpHandle", "property": "value", "equals": "dizayn" },
+  { "type": "assert", "selector": "[data-handle-state]", "property": "text", "equals": "Свободен" },
+  { "type": "assert", "selector": "[data-bn-tab=\"gallery\"]", "property": "text", "equals": "Из галереи" },
+  { "type": "assert", "selector": "#grpPreviewMeta", "property": "text", "equals": "@dizayn · 1 участник" },
+  { "type": "click", "selector": ".modal button[type=\"submit\"]" },
+  { "type": "click", "selector": "#chatTitleBtn" },
+  { "type": "assert", "selector": ".modal .link-row code", "property": "text", "equals": "https://youchat-msg.ru/g/dizayn" },
+  { "type": "click", "selector": "[data-gtab=\"requests\"]" },
+  { "type": "click", "selector": "[data-demo-request]" },
+  { "type": "click", "selector": "[data-req-accept]" },
+  { "type": "click", "selector": "[data-gtab=\"members\"]" },
+  { "type": "click", "selector": "[data-member-menu]" },
+  { "type": "assert", "selector": "[data-menu-act=\"promote\"]", "property": "text", "equals": "Назначить админом" }
+]
